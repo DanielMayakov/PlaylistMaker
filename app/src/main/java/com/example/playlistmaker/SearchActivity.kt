@@ -13,7 +13,7 @@ import androidx.appcompat.widget.Toolbar
 
 class SearchActivity : AppCompatActivity() {
 
-    companion object {
+    private companion object {
         const val SEARCH_QUERY = "SEARCH_QUERY"
     }
 
