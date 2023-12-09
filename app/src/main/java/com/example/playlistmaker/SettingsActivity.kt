@@ -55,8 +55,8 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         findViewById<TextView>(R.id.agreementTextView).setOnClickListener {
-            val sendIntent = Intent(Intent.ACTION_VIEW)
-            intent.data = Uri.parse(getString(R.string.agreement_link))
+            var sendIntent = Intent(Intent.ACTION_VIEW)
+            sendIntent.data = Uri.parse(getString(R.string.agreement_link))
             try {
                 startActivity(sendIntent)
             } catch (ex: ActivityNotFoundException) {
