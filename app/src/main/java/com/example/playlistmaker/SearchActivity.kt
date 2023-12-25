@@ -6,29 +6,41 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.View.GONE
 import android.view.View.VISIBLE
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
-import android.widget.ImageView
-import androidx.appcompat.widget.Toolbar
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.playlistmaker.databinding.ActivitySearchBinding
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class SearchActivity : AppCompatActivity() {
 
-    private companion object {
+    private val tracksBaseUrl = "https://itunes.apple.com"
+
+    private val retrofit = Retrofit.Builder()
+        .baseUrl(tracksBaseUrl)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    private val tracksApi = retrofit.create(TracksApi::class.java)
+    private val adapter = TrackAdapter()
+
+    companion object {
         const val SEARCH_QUERY = "SEARCH_QUERY"
     }
 
+    lateinit var searchBinding: ActivitySearchBinding
     private var searchInputQuery = ""
-    private lateinit var inputEditText: EditText
-    private lateinit var clearImageView: ImageView
-    private lateinit var toolbar: Toolbar
 
     private val simpleTextWatcher = object : TextWatcher {
-
         override fun onTextChanged(s: CharSequence?, s1: Int, s2: Int, s3: Int) {
             if (s.isNullOrEmpty()) {
-                findViewById<ImageView>(R.id.clearImageView).visibility = GONE
+                searchBinding.clearImageView.visibility = GONE
             } else {
-                findViewById<ImageView>(R.id.clearImageView).visibility = VISIBLE
+                searchBinding.clearImageView.visibility = VISIBLE
             }
             searchInputQuery = s.toString()
         }
@@ -40,26 +52,95 @@ class SearchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_search)
+        searchBinding = ActivitySearchBinding.inflate(layoutInflater)
+        setContentView(searchBinding.root)
 
-        inputEditText = findViewById(R.id.inputEditText)
-        clearImageView = findViewById(R.id.clearImageView)
-        toolbar = findViewById(R.id.settings_toolbar)
-        inputEditText.requestFocus()
+        searchBinding.inputEditText.requestFocus()
 
-        findViewById<Toolbar>(R.id.settings_toolbar).setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
-        findViewById<ImageView>(R.id.clearImageView).setOnClickListener { clearSearchForm() }
-        findViewById<EditText>(R.id.inputEditText).addTextChangedListener(simpleTextWatcher)
+        searchBinding.settingsToolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
+        searchBinding.clearImageView.setOnClickListener { clearSearchForm() }
+        searchBinding.inputEditText.addTextChangedListener(simpleTextWatcher)
+
+        searchBinding.searchRecycler.layoutManager = LinearLayoutManager(
+            this,
+            LinearLayoutManager.VERTICAL,
+            false
+        )
+        searchBinding.searchRecycler.adapter = adapter
+
+        searchBinding.inputEditText.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                searchTrack()
+            }
+            false
+        }
+        refresh()
     }
 
+    private fun refresh() {
+        searchBinding.refreshButton.setOnClickListener {
+            searchTrack()
+        }
+    }
+
+    private fun searchTrack() {
+        tracksApi.searchTrack(searchBinding.inputEditText.text.toString())
+            .enqueue(object : Callback<TrackResponse> {
+                override fun onResponse(
+                    call: Call<TrackResponse>,
+                    response: Response<TrackResponse>
+                ) {
+                    if (searchBinding.inputEditText.text.isNotEmpty() && !response.body()?.results.isNullOrEmpty() && response.code() == 200) {
+                        adapter.tracks = response.body()?.results as MutableList<Track>
+                        showPlaceholder(Placeholder.SEARCH_RESULT)
+                    } else {
+                        showPlaceholder(Placeholder.NOTHING_FOUND)
+                    }
+                }
+
+                override fun onFailure(call: Call<TrackResponse>, t: Throwable) {
+                    showPlaceholder(Placeholder.INTERNET_PROBLEM)
+                }
+            })
+    }
+
+    fun showPlaceholder(placeholder: Placeholder) {
+        when (placeholder) {
+            Placeholder.NOTHING_FOUND -> {
+                searchBinding.searchRecycler.visibility = GONE
+                searchBinding.internetProblem.visibility = GONE
+                searchBinding.nothingFound.visibility = VISIBLE
+
+            }
+            Placeholder.INTERNET_PROBLEM -> {
+                searchBinding.searchRecycler.visibility = GONE
+                searchBinding.nothingFound.visibility = GONE
+                searchBinding.internetProblem.visibility = VISIBLE
+            }
+
+            else -> {
+                searchBinding.searchRecycler.visibility = VISIBLE
+                searchBinding.nothingFound.visibility = GONE
+                searchBinding.internetProblem.visibility = GONE
+            }
+        }
+    }
 
     private fun clearSearchForm() {
-        findViewById<EditText>(R.id.inputEditText).setText("")
+        searchBinding.inputEditText.setText("")
+        adapter.tracks.clear()
+        showPlaceholder(Placeholder.SEARCH_RESULT)
+        clearPlaceholders()
         val view = this.currentFocus
         if (view != null) {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
             imm.hideSoftInputFromWindow(view.windowToken, 0)
         }
+    }
+
+    private fun clearPlaceholders() {
+        searchBinding.nothingFound.visibility = GONE
+        searchBinding.internetProblem.visibility = GONE
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -70,8 +151,9 @@ class SearchActivity : AppCompatActivity() {
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         searchInputQuery = savedInstanceState.getString(SEARCH_QUERY, "")
-        inputEditText.setText(searchInputQuery)
-
+        if (searchInputQuery.isNotEmpty()) {
+            searchBinding.inputEditText.setText(searchInputQuery)
+            searchTrack()
+        }
     }
 }
-
