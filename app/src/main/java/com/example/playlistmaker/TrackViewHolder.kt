@@ -8,7 +8,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners
 import java.text.SimpleDateFormat
 import java.util.*
-//updated this
+
 class TrackViewHolder (itemView: View): RecyclerView.ViewHolder (itemView) {
 
     private val artistName = itemView.findViewById<TextView>(R.id.artistName)
